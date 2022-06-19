@@ -7,39 +7,23 @@ class MoviesController < ApplicationController
   end
 
   def index
-    @ratings_to_show = ['G','PG','PG-13','R','NC-17']
-    @all_ratings = ['G','PG','PG-13','R','NC-17']
-    @ratings = params[:ratings] || session[:ratings] || @all_ratings.map{ |rating| [rating,1] }.to_h
-    @ratings_to_show = @ratings
-    @movies = Movie.with_ratings(@ratings)
-
-    @sort = params[:sort] || session[:sort]
-    case @sort
-    when 'title'
-     @title_header = 'hilite'
-    when 'release_date'
-     @release_date_header = 'hilite'
-    end
-    
-    if @ratings == {}
-      Hash[@ratings.map {|rating| [rating, rating]}]
-    end
-    
-    if params[:sort] != session[:sort]
-      session[:sort] = @sort
-      redirect_to :sort => @sort, :ratings => @ratings and return
-    end
-    
-    if params[:ratings] != session[:ratings] 
-      session[:sort] = @sort
-      session[:ratings] = @ratings
-      redirect_to :sort => @sort, :ratings => @ratings and return
-    end
-    
-    if @sort
-      @movies = Movie.with_ratings(@ratings).order(@sort)
+    # @movies = Movie.all
+    @all_ratings = get_ratings
+    #initialize session ratings if it is not defined yet
+    session[:ratings] = @all_ratings unless session.has_key?(:ratings)
+    #get ratings from parameters if they are given
+    if params.has_key?(:ratings) and !params[:ratings].empty?
+      session[:ratings] = params[:ratings].keys
     else
-      @movies = Movie.with_ratings(@ratings)
+      session[:ratings] = @all_ratings
+    end
+    @selected = session[:ratings]
+    #get sortby if it is given
+    session[:sortby] = params[:sortby] if params.has_key?(:sortby)
+    if session.has_key?(:sortby)
+      @movies = Movie.order(session[:sortby]).where(:rating => @selected)
+    else
+      @movies = Movie.where(:rating => @selected)
     end
   end
 
@@ -76,5 +60,9 @@ class MoviesController < ApplicationController
   # This helps make clear which methods respond to requests, and which ones do not.
   def movie_params
     params.require(:movie).permit(:title, :rating, :description, :release_date)
+  end
+
+  def get_ratings
+    Movie.select(:rating).map(&:rating).uniq
   end
 end
