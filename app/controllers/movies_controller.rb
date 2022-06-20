@@ -7,24 +7,35 @@ class MoviesController < ApplicationController
   end
 
   def index
-    # @movies = Movie.all
-    @all_ratings = get_ratings
-    #initialize session ratings if it is not defined yet
-    session[:ratings] = @all_ratings unless session.has_key?(:ratings)
-    #get ratings from parameters if they are given
-    if params.has_key?(:ratings) and !params[:ratings].empty?
-      session[:ratings] = params[:ratings].keys
-    else
-      session[:ratings] = @all_ratings
+    @all_ratings = Movie.all_ratings
+    
+
+    if !session.key?(:ratings) || !session.key?(:sort_by)
+      @all_ratings_hash = Hash[@all_ratings.collect {|key| [key, '1']}]
+      session[:ratings] = @all_ratings_hash if !session.key?(:ratings)
+      session[:sort_by] = '' if !session.key?(:sort_by)
+      redirect_to movies_path(:ratings => @all_ratings_hash, :sort_by => '') and return
     end
-    @selected = session[:ratings]
-    #get sortby if it is given
-    session[:sortby] = params[:sortby] if params.has_key?(:sortby)
-    if session.has_key?(:sortby)
-      @movies = Movie.order(session[:sortby]).where(:rating => @selected)
-    else
-      @movies = Movie.where(:rating => @selected)
+    
+    if !params.has_key?(:ratings) || !params.has_key?(:sort_by)
+      ratings = params.has_key?(:ratings) ? params[:ratings] : session[:ratings]
+      sort_by = params.has_key?(:sort_by) ? params[:sort_by] : session[:sort_by]
+      redirect_to movies_path(:ratings => ratings, :sort_by => sort_by) and return
     end
+
+    @ratings_to_show = params[:ratings] ? params[:ratings].keys : []
+    @ratings_to_show_hash = Hash[@ratings_to_show.collect {|key| [key, '1']}]
+    @movies = Movie.with_ratings(@ratings_to_show)
+    session[:ratings] = params[:ratings]
+
+    column_selected_styles = "hilite bg-warning"
+    column_classes = {@title_header=> "", @release_date_header=> ""}
+
+    if params[:sort_by]
+      instance_variable_set("@#{params[:sort_by]}_header", column_selected_styles)
+      @movies = params[:sort_by] ? @movies.order(params[:sort_by]) : @movies 
+      session[:sort_by] = params[:sort_by]
+    end     
   end
 
   def new
@@ -60,9 +71,5 @@ class MoviesController < ApplicationController
   # This helps make clear which methods respond to requests, and which ones do not.
   def movie_params
     params.require(:movie).permit(:title, :rating, :description, :release_date)
-  end
-
-  def get_ratings
-    Movie.select(:rating).map(&:rating).uniq
   end
 end
